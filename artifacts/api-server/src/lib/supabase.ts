@@ -2,16 +2,20 @@ import { createClient } from "@supabase/supabase-js";
 import { logger } from "./logger";
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// Prefer the newer publishable key; fall back to the anon key
+const supabaseKey =
+  process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
   logger.error("SUPABASE_URL environment variable is required");
   process.exit(1);
 }
 
-if (!supabaseAnonKey) {
-  logger.error("SUPABASE_ANON_KEY environment variable is required");
+if (!supabaseKey) {
+  logger.error(
+    "SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY environment variable is required",
+  );
   process.exit(1);
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseKey);
