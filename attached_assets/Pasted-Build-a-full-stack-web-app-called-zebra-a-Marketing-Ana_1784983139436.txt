@@ -1,0 +1,184 @@
+Build a full-stack web app called *zebra* — a Marketing Analytics &
+Predictive Insights Platform that predicts campaign success, Customer
+Acquisition Cost (CAC), conversion rate, and ROI for a planned marketing
+campaign, using a model trained on historical campaign data.
+
+## Stack (use exactly this — don't substitute)
+- Next.js 14 (App Router) + TypeScript + Tailwind CSS
+- Supabase for the database (Postgres) — use @supabase/supabase-js
+- Recharts for charts
+- No separate backend server — use Next.js Route Handlers
+  (app/api/.../route.ts) for anything that needs to run server-side (mainly
+  inserting predictions into Supabase)
+- Deploy-ready for Replit (or run with npm run dev if in Codex/local)
+
+## Environment variables
+Create a .env.local with:
+
+NEXT_PUBLIC_SUPABASE_URL = https://omzzcizuaosuavhdofff.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tenpjaXp1YW9zdWF2aGRvZmZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NzkxOTcsImV4cCI6MjEwMDU1NTE5N30.wZX1RptC49BUuDXW4PrY7bCEoCLpzDZhmgai2keSZ6A
+
+Read these from Replit/Codex secrets — don't hardcode keys.
+
+## 1. Database setup
+Run the SQL below against the connected Supabase project (via Supabase SQL
+editor, or a setup script if the environment supports the Supabase CLI):
+
+sql
+create table if not exists campaigns (
+  campaign_id text primary key,
+  channel text not null,
+  industry text not null,
+  target_audience text not null,
+  objective text not null,
+  budget numeric not null,
+  duration_days integer not null,
+  target_audience_size integer not null,
+  creative_quality_score numeric not null,
+  past_engagement_score numeric not null,
+  seasonality_index numeric not null,
+  impressions integer not null,
+  clicks integer not null,
+  ctr numeric not null,
+  conversions integer not null,
+  conversion_rate numeric not null,
+  revenue numeric not null,
+  cac numeric not null,
+  roi numeric not null,
+  success boolean not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists predictions (
+  id uuid primary key default gen_random_uuid(),
+  campaign_name text,
+  channel text not null,
+  industry text not null,
+  target_audience text not null,
+  objective text not null,
+  budget numeric not null,
+  duration_days integer not null,
+  target_audience_size integer not null,
+  creative_quality_score numeric not null,
+  past_engagement_score numeric not null,
+  seasonality_index numeric not null,
+  predicted_cac numeric not null,
+  predicted_conversion_rate numeric not null,
+  predicted_roi numeric not null,
+  success_probability numeric not null,
+  will_succeed boolean not null,
+  estimated_conversions integer,
+  estimated_revenue numeric,
+  created_at timestamptz default now()
+);
+
+alter table campaigns enable row level security;
+alter table predictions enable row level security;
+create policy "public read campaigns" on campaigns for select using (true);
+create policy "public read predictions" on predictions for select using (true);
+create policy "public insert predictions" on predictions for insert with check (true);
+
+create or replace view channel_performance as
+select channel, count(*) as campaign_count,
+  round(avg(roi)::numeric,2) as avg_roi, round(avg(cac)::numeric,2) as avg_cac,
+  round(avg(conversion_rate)::numeric,2) as avg_conversion_rate,
+  round(100.0*sum(case when success then 1 else 0 end)/count(*),1) as success_rate_pct
+from campaigns group by channel order by avg_roi desc;
+
+create or replace view dashboard_summary as
+select count(*) as total_campaigns, round(avg(roi)::numeric,2) as avg_roi,
+  round(avg(cac)::numeric,2) as avg_cac, round(avg(conversion_rate)::numeric,2) as avg_conversion_rate,
+  round(100.0*sum(case when success then 1 else 0 end)/count(*),1) as overall_success_rate_pct,
+  round(sum(revenue)::numeric,2) as total_revenue, round(sum(budget)::numeric,2) as total_spend
+from campaigns;
+
+
+Then import the attached campaign_data.csv (4,000 rows) into the campaigns
+table (Supabase Table Editor → Insert → Import CSV, or a one-off Node seed
+script using the service-role key if the environment allows it).
+
+## 2. Prediction model — use the attached model.ts verbatim
+Copy the attached model.ts into lib/model.ts unchanged. It's a
+pre-trained linear/logistic regression (trained on the 4,000 historical
+campaigns — R² 0.81–0.91 on CAC/conversion/ROI, 92.6% accuracy on the
+success classifier) distilled into a plain predictCampaign(input) function
+with the coefficients baked in. **Do not regenerate or re-derive the
+coefficients — use the file exactly as given.** It exports:
+- CampaignInput type (channel, industry, objective, audience, budget,
+  durationDays, targetAudienceSize, creativeQualityScore,
+  pastEngagementScore, seasonalityIndex)
+- predictCampaign(input): PredictionResult → predictedCac,
+  predictedConversionRate, predictedRoi, successProbability, willSucceed,
+  estimatedConversions, estimatedRevenue
+- MODEL_METRICS (accuracy/R² to display in the UI)
+
+## 3. Pages to build
+
+### / — Dashboard
+- Fetch dashboard_summary and channel_performance views from Supabase
+  on the server (Route Handler or Server Component)
+- KPI cards: Total Campaigns, Avg ROI, Avg CAC, Avg Conversion Rate,
+  Overall Success Rate
+- Recharts bar chart: Avg ROI by channel
+- Recharts bar chart: Avg CAC by channel
+- "Recent Predictions" list: last 10 rows from predictions, newest first,
+  live-updating isn't required but re-fetch on page load
+
+### /predict — Predictor
+Form matching CampaignInput exactly:
+- Campaign name (text, optional)
+- Channel (select: Affiliate, Content/SEO, Display Ads, Email, Influencer,
+  Search Ads, Social Media)
+- Industry (select: E-commerce, Education, Finance, Food & Beverage,
+  Healthcare, SaaS, Travel)
+- Objective (select: App Installs, Brand Awareness, Direct Sales,
+  Lead Generation, Retention)
+- Target audience (select: Boomers (57+), Gen X (41-56), Gen Z (18-24),
+  Millennials (25-40))
+- Budget in $ (number input, range roughly $300–$92,000)
+- Duration in days (number/slider, range 7–90)
+- Target audience size (number, range 5,000–4,000,000)
+- Creative quality score (slider 1–10)
+- Past engagement score (slider 0–10)
+- Seasonality index (slider 0.6–1.6, default 1.0)
+
+On submit: call predictCampaign() client-side, POST the result to
+app/api/predictions/route.ts which inserts it into the predictions table,
+then render a result panel:
+- Large success-probability readout (circular gauge or big %), green ≥70%,
+  amber 40–69%, red <40%
+- Three stat cards: Predicted CAC, Predicted Conversion Rate, Predicted ROI
+- Estimated conversions and estimated revenue
+- One auto-generated plain-language sentence of guidance based on the
+  numbers (rule-based, e.g. flag if ROI is negative, or if CAC is above that
+  channel's historical average from channel_performance)
+
+### /insights — Model info (simple, low priority if time-constrained)
+- Display MODEL_METRICS from model.ts as a short disclosure:
+  "Trained on 4,000 historical campaigns — CAC R² 0.81, Conversion Rate R²
+  0.91, ROI R² 0.84, Success classifier 92.6% accuracy (held-out test set)."
+
+## 4. Design direction
+Dark analytics-tool aesthetic, not generic SaaS blue:
+- Background #0B1220, card surface #131B2E, text #E7ECF5
+- Accent colors: amber #E8A33D for ROI/growth metrics, teal #2DD4BF for
+  conversions, coral #F2637B for cost/CAC — use these consistently so a
+  user can tell metric type by color alone
+- Headings in a geometric sans (Space Grotesk if available via Google Fonts),
+  body in Inter, all numeric stats in a monospace face (JetBrains Mono)
+- The predictor's result panel should feel like an instrument reading (dial
+  or gauge for success probability), not just plain text in a box
+
+## 5. Build order (I have ~3 hours total)
+1. Scaffold Next.js + Tailwind + Supabase client, wire env vars
+2. Run schema SQL, import campaign_data.csv
+3. Build / dashboard against the views
+4. Build /predict with lib/model.ts wired end-to-end (this is the core
+   feature — prioritize it working correctly over visual polish)
+5. Apply the design direction from section 4
+6. /insights page if time remains
+7. Test: run 3–4 predictions across different channels, confirm the
+   dashboard's "Recent Predictions" list picks them up
+
+Attached files: supabase_schema.sql, model.ts, campaign_data.csv — use
+them exactly as provided, don't regenerate their contents from scratch.

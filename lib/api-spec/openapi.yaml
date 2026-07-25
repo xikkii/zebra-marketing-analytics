@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: zebra Marketing Analytics & Predictive Insights Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Dashboard operations
+  - name: predictions
+    description: Prediction operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard data
+      description: Returns aggregated campaign stats and channel performance
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardData"
+
+  /predictions:
+    get:
+      operationId: listPredictions
+      tags: [predictions]
+      summary: List recent predictions
+      description: Returns last 10 predictions, newest first
+      responses:
+        "200":
+          description: List of predictions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prediction"
+    post:
+      operationId: createPrediction
+      tags: [predictions]
+      summary: Create a prediction
+      description: Saves a prediction result to the database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictionInput"
+      responses:
+        "201":
+          description: Created prediction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prediction"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +99,194 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    DashboardSummary:
+      type: object
+      required:
+        - totalCampaigns
+        - avgRoi
+        - avgCac
+        - avgConversionRate
+        - overallSuccessRatePct
+        - totalRevenue
+        - totalSpend
+      properties:
+        totalCampaigns:
+          type: number
+        avgRoi:
+          type: number
+        avgCac:
+          type: number
+        avgConversionRate:
+          type: number
+        overallSuccessRatePct:
+          type: number
+        totalRevenue:
+          type: number
+        totalSpend:
+          type: number
+
+    ChannelPerformance:
+      type: object
+      required:
+        - channel
+        - campaignCount
+        - avgRoi
+        - avgCac
+        - avgConversionRate
+        - successRatePct
+      properties:
+        channel:
+          type: string
+        campaignCount:
+          type: number
+        avgRoi:
+          type: number
+        avgCac:
+          type: number
+        avgConversionRate:
+          type: number
+        successRatePct:
+          type: number
+
+    DashboardData:
+      type: object
+      required:
+        - summary
+        - channelPerformance
+        - recentPredictions
+      properties:
+        summary:
+          $ref: "#/components/schemas/DashboardSummary"
+        channelPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChannelPerformance"
+        recentPredictions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Prediction"
+
+    Prediction:
+      type: object
+      required:
+        - id
+        - channel
+        - industry
+        - targetAudience
+        - objective
+        - budget
+        - durationDays
+        - targetAudienceSize
+        - creativeQualityScore
+        - pastEngagementScore
+        - seasonalityIndex
+        - predictedCac
+        - predictedConversionRate
+        - predictedRoi
+        - successProbability
+        - willSucceed
+        - createdAt
+      properties:
+        id:
+          type: string
+        campaignName:
+          type: ["string", "null"]
+        channel:
+          type: string
+        industry:
+          type: string
+        targetAudience:
+          type: string
+        objective:
+          type: string
+        budget:
+          type: number
+        durationDays:
+          type: integer
+        targetAudienceSize:
+          type: integer
+        creativeQualityScore:
+          type: number
+        pastEngagementScore:
+          type: number
+        seasonalityIndex:
+          type: number
+        predictedCac:
+          type: number
+        predictedConversionRate:
+          type: number
+        predictedRoi:
+          type: number
+        successProbability:
+          type: number
+        willSucceed:
+          type: boolean
+        estimatedConversions:
+          type: ["integer", "null"]
+        estimatedRevenue:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+
+    PredictionInput:
+      type: object
+      required:
+        - channel
+        - industry
+        - targetAudience
+        - objective
+        - budget
+        - durationDays
+        - targetAudienceSize
+        - creativeQualityScore
+        - pastEngagementScore
+        - seasonalityIndex
+        - predictedCac
+        - predictedConversionRate
+        - predictedRoi
+        - successProbability
+        - willSucceed
+      properties:
+        campaignName:
+          type: ["string", "null"]
+        channel:
+          type: string
+        industry:
+          type: string
+        targetAudience:
+          type: string
+        objective:
+          type: string
+        budget:
+          type: number
+        durationDays:
+          type: integer
+        targetAudienceSize:
+          type: integer
+        creativeQualityScore:
+          type: number
+        pastEngagementScore:
+          type: number
+        seasonalityIndex:
+          type: number
+        predictedCac:
+          type: number
+        predictedConversionRate:
+          type: number
+        predictedRoi:
+          type: number
+        successProbability:
+          type: number
+        willSucceed:
+          type: boolean
+        estimatedConversions:
+          type: ["integer", "null"]
+        estimatedRevenue:
+          type: ["number", "null"]
